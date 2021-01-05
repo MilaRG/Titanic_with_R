@@ -34,3 +34,6 @@ En este repositorio encontrarás:
 * Recursos sobre estadística y Álgebra lineal de la UOC
 * Jason W. Osborne (2010). Data Cleaning Basics: Best Practices in Dealing with Extreme Scores. Newborn and Infant Nursing Reviews; 10 (1): pp. 1527-3369.
 * Peter Dalgaard (2008). Introductory statistics with R. Springer Science & Business Media
+
+
+**----Este proyecto ha sido creado por Milagros Ramírez Guevara, estudiante del master de ciencia de datos en la UOC----**
