@@ -1,0 +1,1412 @@
+---
+title: "PRAC2: Tipologia i cicle de vida de les dades"
+author: "Mila Ramírez Guevara"
+date: "13/12/2020"
+output:
+  pdf_document: default
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+# 1. Descripción de los datos. 
+
+Para este proyecto contamos con los datos de los pasajeros del Titanic. 
+El estudio que queremos realizar es un pequeño proyecto de Machine Learning, para intentar predecir la supervivencia de los pasajeros del titanic en base a determinadas características conocidas de los mismos que tenemos registradas en el dataset. 
+
+Además de esta predicción general, como objetivo adicional, me gustaría conocer si el pasajero número 892 sobrevivió al Titanic y que predicción hace sobre esto el modelo que plantearé en las siguientes páginas.
+
+Sobre la importancia de un proyecto de este tipo, esta en que no solo abarca la predicción de la supervivencia a un accidente. Además extrapolando este tipo de estudios a otras situaciones, un modelo similar nos podría permitir determinar si en función de ciertas características un usuario de una plataforma compraría determinado producto.
+O un paciente con determinadas patologías o características respondería bien a x tratamiento. Por lo que el desarrollar un proyecto de este tipo puede tener aplicaciones en campos diversos.
+
+Volviendo al proyecto del títanic y a la descripción de los datos es importante tener en cuenta las  notas adicionales que se hacen en la fuente de datos y el significado de las columnas que recogen las características de cada pasajero. 
+
+<CENTER> ![](C:/Users/mila_/Documents/Master ciencia de dades/Tipología y ciclo de vida de los datos/PRAC 2/descripción datos.png){width='400'} </CENTER>
+
+
+* pclass: A proxy for socio-economic status (SES)
+  1st = Upper
+  2nd = Middle
+  3rd = Lower
+
+* age: Age is fractional if less than 1. If the age is estimated, is it in the form of xx.5
+
+* sibsp: The dataset defines family relations in this way...
+  Sibling = brother, sister, stepbrother, stepsister
+  Spouse = husband, wife (mistresses and fiancés were ignored)
+
+* parch: The dataset defines family relations in this way...
+  Parent = mother, father
+  Child = daughter, son, stepdaughter, stepson
+  Some children travelled only with a nanny, therefore parch=0 for them.
+
+Así pues, contamos con 891 registros de 12 variables para el set de entrenamiento y 418 registros de 11 variables para el set de test. El total de registros será de 1309 y más adelante los veremos en detalle.
+
+Siendo el pasajero 892, el primero del que desconocemos la supervivencia y el que voy a intentar descubrir a lo largo de estas páginas.
+
+# 2. Integración y selección de los datos de interés a analizar
+
+Lo primero para comenzar con este apartado sería revisar los datos de los que disponemos.
+
+En mi caso tengo tres tipos de datos Train,test,gender_submision. En la descripción de los archivos que se puede encontrar en Kaggle (https://www.kaggle.com/c/titanic/data) se indica que los datos se han dividido en datos de entrenamiento y de test para el modelo de machine learning que queremos crear 
+
+* Train: csv con información sobre los pasajeros del Titanic para entrenar el modelo. Para este set de datos se proporciona el resultado final para cada pasajero indicando si este sobrevive o no. Y se espera que el modelo esté basado en las características de cada pasajero.
+* Test: csv con información de los pasajeros a modo de test para probar el modelo. Este set de datos se debe usar para ver que tan bien funciona nuestro modelo con datos a ciegas de los que no conocemos el resultado en cuanto a si un pasajero sobrevive o no.
+* gender_submission (es el resultado del modelo en caso de que se plantee que solo las mujeres sobreviven al accidente. y se proporciona como modelo del resultado que debemos obtener después de usar el modelo)
+
+En base a la descripción de estos archivos es claro que los que debo usar para trabajar son el train y el test.
+
+Para crear el modelo debo usar los datos del archivo train.csv, pero para testear el modelo tendré que usar los datos del archivo test.csv. Así que el primer paso será hacer una lectura de ambos archivos y verificar los datos con los que cuento.
+
+```{r chunk 0}
+#librerias necesarias
+
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(hrbrthemes)
+library(viridis)
+
+#Cargar datos y primera revisión
+
+Titanic_train<- read.csv(
+  paste("C:/Users/mila_/Documents/Master ciencia de dades",
+  "/Tipología y ciclo de vida de los datos/PRAC 2/train.csv",sep=""),
+  header=TRUE)
+
+Titanic_test<- read.csv(
+  paste("C:/Users/mila_/Documents/Master ciencia de dades",
+  "/Tipología y ciclo de vida de los datos/PRAC 2/test.csv",sep = ""),
+  header=TRUE)
+
+
+str(Titanic_train)
+
+
+str(Titanic_test)
+# En este apartado además quiero conocer la identidad del pasajero 892 
+Titanic_test[Titanic_test$PassengerId==892,]
+
+```
+
+De esta primera revisión podemos ver que los datos con los que contamos en ambos archivos son similares para verificar que en efecto podemos usar train.csv como set de entrenamiento compararé las columnas con las que contamos en ambos dataframe, lo esperable es que train.csv  tenga un campo referido a la supervivencia y test.csv no cuente con el. ya lo hemos visto con la función str, pero dado que para combinar ambos archivos debemos verificar que los nombres de las variables son identicos he considerado oportuno revisar solo el nombre de las columnas, para ver si hay diferencias en la escritura(Mayúsculas, minúsculas,errores tipograficos...)
+Además en esta primera exploración hemos descubierto la identidad de nuestro pasajero 892 Mr James Kelly pasajero de tercera clase, de 34 años que viajaba solo pago 7,8 libras por el billete y embarcó en el puerto de Queensland.
+
+```{r chunk 1}
+#Revisión de columnas en dataframes
+colnames(Titanic_train)
+colnames(Titanic_test)
+```
+
+De la revisión de columnas en efecto vemos que el archivo train.csv cuenta con una columna referida a la supervivencia. 
+
+En este caso la integración de datos no sería obligatoria ya que para hacer el modelo puedo trabajar con los datos que me proporciona el archivo train csv, pero deberé hacer la limpieza de ambos datasets y dado que cuentan con prácticamente las mismas variables he considerado mejor hacer la limpieza en conjunto de todos los datos. 
+
+Por lo tanto tendré que integrar los datos de train con test, y combinar ambos dataframes para más adelante volver a separarlos.
+
+La variable survived, que solo está presente en el grupo de entrenamiento se debe añadir también al grupo test, por lo que creo una variable en el dataframe test que se llame "Survived" y tenga valores NA. Quiero además comprobar antes de combinar los dataframes que en el dataframe "train" no hay valores NA para Survived, y en efecto es así. 
+
+Además para más adelante separar los datos tendré la opción de separar por el PassangerID, teniendo en cuenta de que se trata  de números consecutivos y podría hacer el corte en la fila 891 para el set de entrenamiento, u otra  opción sería usar el campo "Survived", pero la finalidad última del proyecto es que estos valores dejen de ser NA, y se puedan predecir, por lo que no sería un buen separador, así que he decidido añadir una nueva columna en ambos dataset para identificar si son registros de entrenamiento o test. 
+
+```{r chunk 2}
+paste("Los valores NA para variable Survived rn train son:",sum(is.na(Titanic_train$Survived)))
+
+#nueva columna en test dataframe
+
+Titanic_test$Survived <- NA
+
+#nueva columna Set_type para separar dataframes más adelante
+Titanic_test$Set_type<- "test"
+Titanic_train$Set_type<- "train"
+
+#combinación de datasets
+
+Titanic_complete<- rbind(Titanic_train, Titanic_test)
+
+#compruebo las filas del nuevo dataframe para ver si es correcto.
+paste("Número de filas de Dataframe Titanic_complete:",nrow(Titanic_complete))
+```
+
+# 3. Limpieza de datos.
+
+Antes de empezar la limpieza de datos propiamente dicha, quiero revisar la cantidad de datos de que dispongo, de manera más formal ya que esta información si está facilmente accesible en el apartado "global enviroment" de RStudio, pero para la presentación del trabajo considero que es importante tenerla visible. Así que haré un estudio muy preeliminar para determinar las dimensiones del dataframe con el que estoy trabajando y algunas características de las variables.  
+
+```{r chunk 3}
+
+#preliminar analysis of dataframe variables and dimensions
+
+str(Titanic_complete)
+
+```
+
+Aquí comprobamos que el tipo de objeto es en efecto un Dataframe que contiene 1309 observaciones y 13 variables, los nombres de cada variable y la interpretación que hace R de cada una de ellas.
+
+En la interpretación que hace R por defecto, se considera:
+
+* variables numéricas discretas (int) : PassengerId, Survived, Pclass, Age, SibSp, Parch
+* variables numéricas continuas (num):Fare
+* variables tipo texto: Name, Sex, Ticket, Cabin, Embarked, set_type
+
+De la interpretación de datos que ha hecho R podemos detectar que hay algunas diferencias con lo que podríamos interpretar nosotros.
+Ya que las variables numéricas que interpreto serían (Age, SibSp,Parch y Fare)
+Mientras que las variables Survived, Pclass,Sex,Cabin, Embarked y set_type deberían considerarse variables categóricas. 
+
+PassagerID, que sirve para identificar a los pasajeros la mantendré como variable numérica, y la variable Name tal y como está planteada tampoco es representativa pero podemos hacer alguna transformación con ella y plantearla como un factor.
+
+Interpretado esto lo que haré será cambiar la interpretación de variables que ha hecho R y establecer la mía.
+
+
+```{r chunk 4}
+
+#cambio de variables texto a variables factor. 
+
+for (i in seq_along(Titanic_complete[,c(2,3,5,9,11,12,13)])) {
+  Titanic_complete[,c(2,3,5,9,11,12,13)][[i]] <- as.factor(Titanic_complete[,c(2,3,5,9,11,12,13)][[i]])
+}
+#comprobació de que el cambio es efectivo
+unlist(lapply(Titanic_complete[,c(2,3,5,9,11,12,13)], class), use.names = TRUE)
+```
+
+## 3.1 Gestión de Zeros y elementos vacíos. 
+
+Para iniciar esta sección, utilizo la función summary para tener un resumen y visión general de las variables categóricas, numéricas y también para poder detectar el número de missing values.
+
+```{r chunk 5}
+#summary of variables
+summary(Titanic_complete)
+
+#hecha la comprobación la única variable en la que es extraño encontrar valores 0 es en Fare.
+#ya que esto implica una tarifa gratuita, lo cual es extraño 
+#contabilizo el número de 0 para esta variable con el siguiente comando.
+
+paste("número de registros con valor zero en la tarifa:",length(Titanic_complete[Titanic_complete$Fare==0,]))
+
+```
+Con esta primera conversión podemos detectar que hay valores missing en la variable Age se reflejan como NA al igual que en Fare, por otro lado en Cabin y embarked se reflejan como una variable vacía (null). Además hay valores zero en SibSp, Parch y Fare. 
+
+No es extraño que haya valores zero en SibSp, Parch pero sí en Fare como se ha comentado. 
+
+La mayor cantidad devalores missing esta en Cabin y en Age por lo que habrá que tratarlos, Los otros valores missing corresponden a Embarked y Fare, aunque estos son solo 3 registros por lo que se imputen o se eliminen  no deberían tener una gran repercusión.
+
+De la función Summary también deduzco que las variables categoricas están normalizadas. Es decir, no hay variables que estén por ejemplo escritas en diferentes formas(Mayúsculas, minúsculas) y que representen la misma categoría sino que las nomenclaturas son homogéneas. Donde podría sospechar que podría existir este problema sería en las variables Ticket y Cabin ya que como vemos contienen varios valores que se clasifican como "otros". Para poder acabar de comprobar esto he usado la función Table para hacer un conteo de los registros de cada variable
+
+Pero de esta comprobación extraigo muy poca información ya que como es esperable hay una gran cantidad de tickets y de cabinas. Si quiero usar estas variables para el modelo tendré que tratarlas de alguna manera.
+
+```{r chunk 6}
+
+#comprobación de variables categóricas Cabin y TIcket,el primer dataframe corresponde
+#a Ticket y el segundo a Cabin
+
+id.ticket_Cabin<-c(9,11)
+
+var_ticket_Cabin<-colnames(Titanic_complete)[id.ticket_Cabin]
+
+for (i in var_ticket_Cabin){
+  
+  print(tail(as.data.frame(table(Titanic_complete[i]))))
+  
+}
+
+```
+
+Por el momento he decidido considerar que las cabinas y tickets estan normalizados.Aunque muy posiblemente estas variables no lleguen a la fase de análisis El siguiente paso es tratar los valores perdidos
+
+### missing values en variable Embarked
+
+Antes de optar por un método de imputación de variable he decidido revisar los pasajeros concretos que tienen estos valores perdidos para verificar si hay algo que nos pudiera dar una pista clara del puerto de Embarque, sabiendo que la mayoría de pasajeros embarcaron en el puerto S(South Hampton)una opción sería también asumir que para estos pasajeros el emarque fue en el puerto S.
+
+```{r chunk 7}
+#Búsqueda de los pasajeros con valores missing
+
+Titanic_complete[Titanic_complete$Embarked=="",]
+
+```
+
+las pasajeras coinciden en número ticket, tarifa, clase y cabina, es posible que embarcaran en el mismo puerto. No consta que viajaran con esposos,hermanos o hijos, por lo que descarto poder obtener el puerto de embarque  a partir de datos de posibles familiares que viajaran con ellas.
+
+otra opción es encontrar pasajeros que tengan la misma cabina o el mismo ticket es posible que si eso se diera embarcaran en el mismo puerto que estas dos pasajeras, aplico el filtro correspondiente para detectar si hay otros pasajeros en la misma cabina o que tengan el mismo ticket 
+```{r chunk 8}
+
+#Busqueda de otros pasajeros con misma cabina o número de ticket.
+Titanic.embarked<-Titanic_complete[Titanic_complete$PassengerId!=62 &
+                                     Titanic_complete$PassengerId!=830,]
+Titanic.embarked[Titanic.embarked$Cabin=="B28",]
+Titanic.embarked[Titanic.embarked$Ticket==113572,]
+
+```
+
+No tengo ningún resultado, y en este punto considero que al tratarse de únicamente 2 registros podríamos eliminarlos, en una situación de real seguramente los eliminaría, pero al tratarse de un proyecto para estudio y para una competición de Kaggle decido optar por buscar algún método de imputación. 
+
+Una opción es encontrar los puertos de embarque considerando las clases y las tarifas. 
+
+Utilizo la función table para verificar en que puertos han subido mayoritariamente los pasajeros de primera clase, ya que si hay una clara mayoría en este punto se resolvería el problema.
+
+```{r chunk 9}
+#Puertos de embarque segun clase
+
+table(Titanic.embarked$Pclass,Titanic.embarked$Embarked)
+
+```
+De esto puedo deducir que es más probable que las pasajeras embarcaran o bien en South Hampton o bien en Cherburgo. Considerando además de la clase las tarifas de los tickets puedo plantear dos graficos, un boxplot y un histograma
+
+```{r chunk 10}
+
+#creo un dataframe accesorio que no incluya a los pasajeros con variabales missing
+Titanic.embarked<-filter(Titanic.embarked[Titanic.embarked$Pclass==1 
+                                          & Titanic.embarked$Embarked!="Q" 
+                                          & Titanic.embarked$Fare<300,])
+Titanic.embarked<-Titanic.embarked %>% 
+  filter_all(~ !is.na(.))
+
+
+nf <- layout(matrix(c(1,2,1,2,1,2),ncol=4), widths=c(10,10), heights=c(15,15), TRUE) 
+
+boxplot(Titanic.embarked$Fare ~ Titanic.embarked$Embarked, horizontal = TRUE,
+        ylim = c(0,300))
+
+#representación de tarifas en relación al puerto de embarque
+hist(Titanic.embarked[Titanic.embarked$Embarked=="C","Fare"],
+     breaks=30,xlim=c(0,300), col=rgb(1,0,0,0.5), 
+     xlab="fare", main="payment of passanger embarked on c & s")
+hist(Titanic.embarked[Titanic.embarked$Embarked=="S","Fare"],
+     breaks=30,xlim=c(0,300), col=rgb(0,0,1,0.5), add=T)
+legend("topleft", legend=c("port C","port S"), 
+       col=c(rgb(1,0,0,0.5), 
+     rgb(0,0,1,0.5)), pt.cex=2, pch=15 )
+
+
+```
+
+En ambos llego a la misma conclusión. Lo más probable es que las pasajeras embarcaran en el puerto S, ya que apróximadament el 70% de los pasajeros de primera clase que pagaron por sus tickets 80 libras o menos embarcaron por la puerta S mientras que en el caso de la puerta C solo lo hicieron un 50%.En el histograma veo información similar, hay más probabilidad de que los pasajeros embarcaran por la puerta S que por la C. 
+
+En este caso voy a optar por considerar que las pasajeras embarcaron en el puerto de South Hampton que además es donde más pasajeros embarcaron, aún así todo apunta a que son missing values completely at Random
+Para comprobar que el cambio se ha realizado correctamente hago el recuento otra vez con la función "table"
+
+```{r chunk 11}
+
+#Recuento en dataframe original Titanic_complete
+Titanic_complete[Titanic_complete$Embarked=="","Embarked"]<-"S"
+table(Titanic_complete$Embarked)
+```
+### missing values en variable Fare
+
+
+A priori este valor faltante se podría considerar de tipo MAR(Missing at random), es decir a priori se podría explicar esta variable a partir de la classe y tal vez también por el puerto de embarque pero solo con la clase deberíamos poder tener una aproximación al dato.
+
+```{r chunk 12}
+#compruebo el registro completo que corresponde al dato perdido
+
+Titanic_complete[is.na(Titanic_complete$Fare),]
+
+#compruebo en que valores de fare se concentran las tarifas para la tercera clase 
+Titanic.class<-filter(Titanic_complete[Titanic_complete$Pclass==3,])
+ggplot(Titanic.class,aes(x=Fare))+geom_boxplot()
+
+summary(Titanic.class$Fare)
+```
+
+No disponemos de mucha información en el registro del pasajero pero si hacemos un grafico de caja para la tarifa veremos que hay varios valores un tanto extraños que se alejan de la mayoría, este tipo de valores suele afectar a la media, por lo que en este caso para la imputación, será mejor reemplazar el valor de la variable por la mediana que suele verse menos afectada por valores extremos, así pues reemplazo el valor. Aunque es cierto que hay más valores extremos de los que esperaría para esta variable y tendré que hacer más comprobaciones al respecto.
+
+```{r chunk 13}
+#calculo de la mediana y reemplazo del valor missing
+median.fare<-median(Titanic_complete$Fare, na.rm = TRUE)
+Titanic_complete[is.na(Titanic_complete$Fare),"Fare"]<-median.fare
+#comprobación de que ya no hay valores missing para Fare
+sum(is.na(Titanic_complete$Fare))
+
+```
+### missing values variable Age
+
+La imputación que haga de esta variable tendrá una repercusión mayor en el modelo por lo tanto quiero primero hacer una evaluación de los valores que si tenemos para esta variable y también de los registros que no tienen esta variable missing para ver cual sería la mejor manera de imputar estos valores. 
+
+En este caso interpreto que las variables missing son también del tipo MAR(Missing at random), es decir que alguna otra variable tal vez pueda explicar la ausencia de estos valores
+
+Por otra parte, una posible causa que se me ocurre es que tal vez los pasajeros de los que no tenemos datos sobre la edad no sobrevivieran al accidente.
+
+Hago un gráfico para comprobarlo.
+```{r chunk 14}
+
+#identificadores de los registros con missing data para la variable Age
+id.mis.age <- which( is.na(Titanic_complete$Age))
+plot(Titanic_complete[id.mis.age,"Survived"],col = rgb(1, 0, 1, 0.10))
+
+
+
+```
+
+Del gráfico puedo ver que en efecto la mayoría de los datos perdidos sobre la edad se corresponden a pasajeros que no sobrevivieron al  accidente.
+
+Hago un histograma y reviso otra vez el resumen de los datos 
+
+```{r chunk 15}
+
+#Distribución de las edades y resumen de los datos. 
+
+hist(Titanic_complete$Age,col = rgb(0, 1, 0, 0.10))
+summary(Titanic_complete$Age,na.rm=TRUE)
+
+```
+
+Del gráfico también deduzco que la distribución de las edades en un histograma se aproxima a una normal (esto se verá en detalle en puntos posteriores)y con el resumen  de datos obtengo que la mediana y la media son bastante similares la media es de 29,88 y la mediana es de 28,00. Normalmente si hay muchos valores extremos o outliers reemplazaría los datos por la mediana pero realmente no tenemos muchos valores extremos y todos entran dentro de lo que podemos considerar valores normales para la edad siendo la persona mayor de unos 80 años y las menores bebes de meses. 
+
+En este caso podría imputar los valores directamente con la media, pero los valores missing son de hasta el 20% por lo que realmente son muchos valores como para imputarlos todos con el mismo valor, una alternativa es generar valores random que se encuentren dentro del rango interquartilico, que constituye el 50% de los registros.
+
+```{r chunk 16}
+
+#Calculo de valores random que se encuentren entr Q1 Y Q3. 
+
+Q1<-quantile(Titanic_complete$Age,na.rm = TRUE)[[2]]
+Q3<-quantile(Titanic_complete$Age,na.rm = TRUE)[[4]]
+n.row<-nrow(Titanic_complete[id.mis.age,])
+valores<- sample(Q1:Q3,n.row,replace = TRUE)
+
+#reemplazo los valores missing por el conjunto de valores random generados
+Titanic_complete[id.mis.age,"Age"]<-valores
+
+#compruebo que los  valores se han substituido correctamentamente contando los valores NA, para la variable Age
+sum(is.na(Titanic_complete$Age))
+
+summary(Titanic_complete$Age)
+
+```
+
+Hacer esta imputación provoca que el rango intercuartílico se mantenga similar al inicial y también que la media se altere menos. Aunque no es un método e imputación ideal. Tal vez cabría considerar otro tipo de imputación como KNN de cara a mejoras en el modelo.
+
+### missing values variable cabin
+
+En el caso  de los valores missing para la variable Cabin representan hasta el 77% de los valores que tenemos para esta variable, por lo tanto más de la mitad de la muestra, a priori no creo que estos valores puedan ser imputables no obstante, si separamos la letra de los números que forman cada cabina podemos tener categorías más  claras, y ver si hay algún tratamiento posible.
+
+
+```{r chunk 17}
+
+#Creo una nueva columna resumen de las cabinas solo con la letra. 
+#Buscando información sobre las cabinas la letra indica la cubierta en la que se encontraban. 
+#y nos puede servir para agrupar las cabinas. 
+
+Titanic_complete$CabinG <- substring(Titanic_complete$Cabin, 1, 1)
+#compruebo que la nueva variable se ha creado correctamente con la función head
+head(Titanic_complete)
+#con las funciones table y addmargins compruebo la cantidad de registros
+#que tengo para cada variable.
+
+addmargins(addmargins(table(Titanic_complete$Pclass,Titanic_complete$CabinG),2),1)
+
+```
+
+De aquí lo más relevante es la suma de valores faltante 77%(1014) respecto al total de valores que podemos ver en la última columna (sum) con el valor de 1309,  Además no vemos una relación clara entre la clase y la cabina, podemos decir que.
+*primera clase: A    B    C    D    E  con mayoría en la cabina C>B>D  
+*segunda clase: D    E    F (no contamos con suficientes registros para establecer mayorías claras entre los 3 grupos)
+*Tercera clase: E    F    G (no contamos con suficientes registros para establecer mayorías claras entre los 3 grupos)
+
+Aún a pesar tener  las cabinas que se asignan más o menos a cada clase considero que en este caso por el volumen tan alto de valores missing es mejor no imputarlos. 
+
+Pero si podemos hacer una última comprobación que me resulta interesante y es el contrastar si los datos missing se corresponden mayoritariamente con los pasajeros que no han sobrevivido, de ser así es posible que haya una  causa para esto y una opción puede ser asignar una cubierta ficticia a las cabinas desconocidas, y así poder trabajar con los datos restantes, y ver si los datos de la cabina ficticia se comportan igual aunque, es posible que esto requiera la creación de variables adicionales, y por la limitación de tiempo no se si podré abarcar este aspecto.
+
+```{r chunk 18}
+
+#quiero verificar si los datos faltantes corresponden mayoritariamente a los pasajeros 
+#que no sobrevivieron al accidente por lo que creo una gráfica 
+
+plot(Titanic_complete[Titanic_complete$Cabin=="","Survived"],col = rgb(0, 1, 0, 0.10))
+Titanic_complete$Cabin<-as.character(Titanic_complete$Cabin)
+#substituyo los valores missing por una N 
+#De este modo se podrá trabajar con los demás y tal vez incluirlos en el modelo.
+Titanic_complete[Titanic_complete$Cabin=="","Cabin"]<-"N"
+Titanic_complete[Titanic_complete$CabinG=="","CabinG"]<-"N"
+
+```
+
+Como se esperaba la mayoria de datos faltantes corresponden a pasajeros que no han sobrevivido. 
+Compruebo que los cambios se han hecho correctamente.
+
+```{r chunk 19}
+
+sum(is.na(Titanic_complete["Cabin"]))
+sum(is.na(Titanic_complete["CabinG"]))
+
+Titanic_complete$Cabin<-as.factor(Titanic_complete$Cabin)
+Titanic_complete$CabinG<-as.factor(Titanic_complete$CabinG)
+
+head(Titanic_complete)
+```
+
+
+### Gestion de zeros para la variable Fare
+
+Como hemos visto en el analisis preeliminar hay 15 valores zero para la tarifa. 
+Las tarifas deberían estar relacionadas con los tickets, así que compruebo si buscando los mismos números de tickets tenemos el mismo número de registros que cuando buscamos los registros que tienen una tarifa de 0 ya que si un ticket tiene un número igual pero con un valor diferente para la tarifa, tendremos más registros, y es posible que el valor faltante sea igual.
+
+
+```{r chunk 20}
+
+#comparación del número de registros de variable fare=0 y 
+#número de registros correspondientes a los tickets 
+Titanic_complete[Titanic_complete$Fare==0,]
+
+nrow(Titanic_complete[Titanic_complete$Fare==0,])
+
+a<-unique(Titanic_complete[Titanic_complete$Fare==0,"Ticket"])
+
+sum_final=0
+for (i in a){
+  filas= nrow(Titanic_complete[Titanic_complete$Ticket==i,])
+  sum_final=sum_final+filas
+}
+sum_final
+
+```
+El número de registros es el mismo, por lo que o bien los valores de las tarifas son correctos para esos número de tickets o tenemos que encontrar los valores de otra manera.  
+
+Después de esto he buscado información sobre la variable Fare. Por lo que he encontrado es una variable compuesta con varios factores que influyen en la misma, había tarifas especiales en función de la edad y de si se adquirían en grupo o si se compraban en algún "pack" que incluyese acceso al barco y a algún tren, además el precio cambiaba en función del país de compra y habían algunos pasajeros trabajadores de los dueños de la compañia que viajaron gratis por lo que he optado por mantener los zeros y no tratarlos ya que seria plausible que este número reducido de valores fuera correcto aunque no habitual, después de todo representa cerca del 1% de todos los registros con los que contamos.
+
+## 3.2 Identificación y  tratamiento de valores extremos(Outliers o valors atípicos).
+
+Para comprobar los valores extremos haré visualizaciones de las variables numéricas, Age, SibSp, Parch y Fare, y con la función boxplot.stats extraeré los valores extremos en cuestión.
+
+*Para la variable Age*, los datos perdidos han sido tratados y fuera de eso en la revisión inicial  que he realizado no he detectado valores atípicos, ya que todos los datos encontrados corresponden a valores normales que podríamos esperar para edades, no obstante si consideramos la representación del boxplot de la muestra podemos contar algunos valores "outliers", pero que no trataré, porque aunque atípicos son valores que forman parte de la muestra.
+
+Hago un gráfico de densidades para tener una representación gráfica de apoyo. Además me ha resultado interesante plantear un gráfico boxplot para ver los valores atípicos en cuanto a edad y sexo.
+
+El  resultado del análisis es el siguiente:
+
+
+```{r chunk 21}
+#recuento de posibles valores outliers 
+
+paste ("los valores atípicos encontrados de acuerdo a la función boxplot.stats:", 
+       length(boxplot.stats(Titanic_complete$Age)$out))
+
+#Gráfico boxplot y de densidades
+
+Titanic_complete %>%
+  ggplot( aes(x=Sex,y=Age, fill=Sex)) +
+    geom_boxplot() +
+    scale_fill_viridis(discrete = TRUE, alpha=0.6) +
+    theme(
+      legend.position="none",
+      plot.title = element_text(size=11)
+    ) +
+    ggtitle("Age Boxplot") +
+    xlab("")
+
+ggplot(mapping = aes(x=Titanic_complete$Age))+geom_density()
+
+```
+Del gráfico de densidades deduzco que la distribución de la variable sigue una normal y pueden haber valores "atípicos", pero deben considerarse como una parte de la muestra . En cuanto a los boxplots planteados la información que tenemos es que los hombres tienen una mediana de edad más elevada y además también habían hombres mayores viajanndo de hasta 80 años, es posible que esto también afectara a su supervivencia en cuanto a que los desplazamientos en un barco en esa situación posiblemente fueron más difíciles para personas mayores.
+
+*Para las variables SibSp y Parch*. He hecho representaciones en una tabla donde he contado el número de registros que tienen cada valor de SibSp o Parch. 
+
+Los valores entran dentro de lo que ya esperaba tras haber hecho anteriormente uso de la función summary y revisando el contexto de la época, no es descabellado pensar que hubieran personas con 8 o incluso 9 hijos. En el siglo XX hubieron grandes avances médicos por los que la supervivencia de los recién nacidos era más elevada y el uso de anticonceptivos aún no estaba demasiado extendido. Voy a considerar por tanto validos todos los valores. 
+
+Además teniendo en cuenta la función Boxplot.stats hago un recuento de los valores que se considerarían atípicos, para ver en que proporción afectan al total de registros.
+
+
+```{r chunk 22}
+
+table(Titanic_complete$SibSp)
+
+layout(matrix(c(1,3,2,3), 2, 2, byrow = TRUE))
+hist(Titanic_complete$SibSp ,col="blue",main=" Histograma SibSp ",breaks =10)
+plot(density(Titanic_complete$SibSp),main="Densidad Sibsp")
+boxplot(Titanic_complete$SibSp ,main="Boxplot Sibsp")
+
+SibSp.outlier <-length(boxplot.stats(Titanic_complete$SibSp)$out)
+paste("los valores atípicos de acuerdo a la función boxplot.stats: ",SibSp.outlier)
+
+table(Titanic_complete$Parch)
+
+layout(matrix(c(1,3,2,3), 2, 2, byrow = TRUE))
+hist(Titanic_complete$Parch ,col="blue",main=" Histograma Parch ",breaks =10)
+plot(density(Titanic_complete$Parch),main="Densidad Parch")
+boxplot(Titanic_complete$Parch ,main="Boxplot Parch")
+
+Parch.outlier <-length(boxplot.stats(Titanic_complete$Parch)$out)
+paste("los valores atípicos de acuerdo a la función boxplot.stats: ",Parch.outlier)
+
+
+
+
+```
+
+Los gráficos muestran distribuciones similares y concuerdan con lo que he podido comprobar con la función Table. 
+
+*Para la variable Fare*, igual que en los casos anteriores planteo un boxplot, un histograma y un grafico de densidad y hago un recuento de los valores suceptibles de considerarse outliers
+
+```{r chunk 23}
+
+Fare.outlier <-length(boxplot.stats(Titanic_complete$Fare)$out)
+paste("los valores atípicos son: ",
+      Fare.outlier)
+
+layout(matrix(c(1,3,2,3), 2, 2, byrow = TRUE))
+hist(Titanic_complete$Fare ,col="blue",main=" Histograma Fare ",breaks =30)
+plot(density(Titanic_complete$Fare),main="Densidad Fare")
+boxplot(Titanic_complete$Fare ,main="Boxplot Fare")
+
+
+```
+
+De el resultado veo que hay valores que en efecto parecen atípicos, sobre todo los de precios superiores a las 500 libras. Voy a comprobar los registros para verificar que la tarifa corresponde a un ticket de primera clase ya que, si no fuera así podemos asumir que en efecto se trata de un valor atípico.
+
+```{r chunk 24}
+
+Titanic_complete[Titanic_complete$Fare>400,]
+```
+
+Vemos que hay cuatro registros con la misma tarifa superior a 500 libras y todos corresponden al mismo número de ticket y todos a primera clase, así que sería muy posible que este número de ticket tenga esa tarifa y que el valor no sea atípico o Outlier. 
+Para comprobarlo aplico el filtro por número de ticket y cuando hago esto compruebo que el ticket PC 17755 tiene siempre el mismo precio 512.3292.
+
+```{r chunk 25}
+
+
+Titanic_complete[Titanic_complete$Ticket=="PC 17755",]
+```
+
+Interpretando estos resultados la conclusión a la que llego es que a pesar de que los valores son atipicos no se deben a errores y no se deben corregir ya que forman parte de la muestra. Los valores muy reducidos y 0 también hemos visto tienen una explicación, por lo que consideraremos que son valores que forman parte de la muestra y representan la propia variación de la misma
+
+
+## Otras comprobaciones en la limpieza de datos. 
+
+Fuera del tratamiento de valores perdidos, de los outliers y del cambio de formato haré algunas comprobaciones más para tener datos con los que sea más fácil trabajar y que aporten más valor al futuro modelo.
+
+* Para la variable PassengerId
+comprobare que no hayan registros repetidos con el mismo passengerId
+
+```{r chunk 26}
+
+length(unique(Titanic_complete$PassengerId))
+
+```
+La conclusión que obtengo de esto es que ningun PassengerId esta repetido. Si alguno estuviera repetido el número de registros únicos sería menor.
+
+* Para la variable Fare
+
+Inicialmente plantee redondearla para simplificar los datos, pero según he avanzado con el análisis he visto que realmente no comportaba un cambio sustancial, así que mantendré la variable tal y como está en lugar de usar la función round como tenía pensado.
+
+
+* Para la variable Name
+
+Esta variable tal y como esta expresada no aporta demasiado valor ni podemos extraer datos relevantes de la misma, pero considerando los apellidos tal vez podrían servirnos para establecer relaciones familiares, y nos dan información sobre los títulos (Miss, Mr, Master, etc)
+
+
+```{r chunk 27}
+#divido la variable name en dos nuevas columnas una para el apellido 
+#y la otra para el título
+
+vars <- c("Surname","Name2")
+Titanic_complete<- separate(Titanic_complete, Name, into = vars, 
+                            sep = c(","), remove=FALSE,extra ="drop")%>%
+  separate(Name2, into = c("Title","namerest"), sep = c(". "),
+           extra="warn")
+
+#elimino la columna residual del nombre que se ha generado al crear dos columnas 
+#más una para el apellido y otra para el título
+Titanic_complete$namerest<-NULL
+# compruebo el dataframe actualizado con los cambios
+head(Titanic_complete)
+
+Titanic_complete$Title<- str_trim(Titanic_complete$Title)
+Titanic_complete$Surname<- as.factor(str_trim(Titanic_complete$Surname))
+
+#revisión de registro con titulo no reconocible 
+Titanic_complete[Titanic_complete$Title=="th",]
+
+
+```
+
+El valor no reconocible corresponde a "the countes" al tener un espacio entre "the", "countess" no se ha separado correctamente, como solo es un registro no considero necesario revisar el código ya que con la función table me ha permitido revisar que era el único título atípico, pero intentaré optimizarlo, en la revisión final.
+
+Después de esto agrupamos los Titulos de acuerdo a los siguientes grupos "elite" (que incluye trabajos de altas categorias sociales como reverendos o doctores o titulos heredados de nobleza que otorgan una categoría de "elite"),non_elite (que incluye Miss, Mr,Ms,Mlle,Mme y Mrs ), a pesar de que creo que de este grupo podríamos crear nuevas variables sobre mujeres casadas o solteras y hombres que no tienen ningún título ni profesion relevante, además de separar totalmente el grupo de nobles voy a dejar la primera clasificación de este modo, pero no lo descarto para futuras mejoras del modelo. 
+
+
+```{r chunk 28}
+#agrupación de categorías.
+
+Titanic_complete$Title[Titanic_complete$Title %in% 
+                         c('Capt','Col','Dr','Major',
+                           'Rev','Master','Don','Jonkheer', 
+                           'Sir','Lady','Dona','th')] <-"elite"
+Titanic_complete$Title[Titanic_complete$Title %in% 
+                         c('Miss', 'Ms', 'Mlle','Mr',
+                           'Mrs','Mme')]<- 'non_elite'
+
+Titanic_complete$Title<-as.factor(Titanic_complete$Title)
+
+table(Titanic_complete$Title)
+
+
+```
+
+* Para las variables Sibsp y Parch
+
+Para estas variables no haré cambios. Pero si considero interesante generar una nueva que incluya los integrantes totales de la familia de un pasajero. para determinar si hay una relación entre e tamaño de una familia y la supervivencia.
+Esta nueva variable será redundante con las otras dos variables pero creo que puede aportar valor al modelo.
+
+```{r chunk 30}
+#creo la variable Family.unit
+Titanic_complete$Family.unit<-Titanic_complete$SibSp+
+  Titanic_complete$Parch+1
+#compruebo que la variaable se ha creado correctamente
+head(Titanic_complete)
+```
+
+Una vez limpiados los datos y creadas las nuevas variables vuelvo a revisar los datos de los que dispongo con las funciones str y summary 
+
+```{r chunk 31}
+str(Titanic_complete)
+summary(Titanic_complete)
+```
+
+El resultado es que tengo más variables pero no todas pasarán a la fase de análisis. 
+Además ya no hay missing values (excepto en el apartado "Survived" donde es normal ya que hemos combinado los datos de train y test).
+
+Y todos los datos están en formatos adecuados para su tratamiento (númerico o factor), exceptuando la variable Name, pero es una variable que no pasará a la fase de análisis.
+
+Por otra parte indicar que a pesar de que hasta aquí he realizado la mayor parte de tareas relativas a la limpieza de los datos es posible que en el siguiente apartado con la selección del modelo y la selección de variables realice alguna tarea más que se considere de limpieza de datos.
+
+
+# 4. Analisis de datos.
+
+## 4.1 Selección de los grupos de datos que se quieren analizar/comparar (planificación de los análisis a aplicar).
+
+El objetivo del análisis es predecir la supervivencia de los pasajeros del Titanic en el grupo Test. 
+
+Los análisis se harán en base al  grupo de datos de Entrenamiento, por lo que antes de iniciar las pruebas estadisticas del punto 4.3 hare la separación de datos otra vez en grupos "Train" y "Test"
+En cuanto a las variables que utilizaré a partir de ahora serán:
+
+*PassangerID (solo con finalidad de identificación de registro)
+*set_type (solo con finalidad de volver a separar datos train/test)
+*Pclass
+*Title
+*Sex
+*Age
+*SibSp/Parch/Family.unit (la información proporcionada por estas variables puede ser redundante, por lo que es posible que solo utilice Family.unit, pero quiero hacer algunas comprobaciones antes de decidirlo y valorar si tal vez el uso de PCA podría ser útil)
+*Fare
+*CabinG
+*Embarked.
+
+### Selección de variables.
+
+* Separación de variables en numéricas o categóricas
+  * Para las variables numéricas (histogramas, boxplot (ya realizado en apartado "limpieza de datos")), correlación entre variables)
+    * Decisión sobre las variables cuantitativas a utilizar en el análisis
+  * Para variables categóricas (gráficos de barras)
+    * Decisión sobre las variables categóricas a utilizar en el análisis
+
+### Análisis exploratorio
+
+* Relación entre variables y supervivencia.
+  * ¿Qué incrementa la supervivencia?¿edad, sexo,clase,tarifa,puerto de embarque?
+  * los títulos nobiliarios garantizan una mayor supervivencia?¿los miembros de famílias numerosas tenían menos posibilidades de salvarse?¿la ubicación de las cabinas en relación al punto de colapso del barco nos indica cuál es la mejor cubierta para sobrevivir al accidente?¿que factores tiene el pasajero 892 a favor y en contra?
+  
+* Decisión sobre las variables finales a utilizar en el análisis, reducción de dataframe y binarización de variables
+
+*------------------Desarrollo del punto 4.1----------------------*
+
+Para seleccionar las variables primero quiero hacer un estudio preeliminar independiente de cada variable, el tratamiento de las variables categóricas será diferente del que de a las variables numéricas por lo que lo primero que haré será separar las variables en 2 grupos. 
+
+```{r chunk 32}
+#identificación de las variables factor y variables numericas
+id.factor<- c(2,3,5,6,7,14,16)
+id.numeric2<- c(8,9,10,12,17)
+id.numeric<-c(8,9,10,12)
+var.factor<-colnames(Titanic_complete)[id.factor]
+var.numeric2<-colnames(Titanic_complete)[id.numeric2]#incluye family.unit
+var.numeric<-colnames(Titanic_complete)[id.numeric]#no incluye family.unit
+head(Titanic_complete[var.factor])
+head(Titanic_complete[var.numeric])
+
+```
+#### Selección de variables: Variables numéricas
+
+A continuación hare comprobaciones sobre las variables numéricas para decidir las que participarán en el modelo.
+```{r chunk 33}
+
+#Histogramas para variables numéricas(cuantitativas), esta revisión nos servirá también 
+#para evaluar la normalidad de las variables, lo que se verá al detalle en el punto 4.2 
+require(gridExtra)
+
+ggplot(Titanic_complete,aes(x=Age)) + 
+  geom_histogram( binwidth=1, fill="#69b3a2", color="#e9ecef", alpha=0.9) +
+  ggtitle("Age") +theme(plot.title = element_text(size=15))
+
+plot1<-ggplot(Titanic_complete,aes(x=SibSp)) + 
+  geom_histogram( binwidth=0.5, fill="#69b3a2", color="#e9ecef", alpha=0.9) +
+  ggtitle("SibSp") +theme(plot.title = element_text(size=15))
+
+plot2<-ggplot(Titanic_complete,aes(x=Parch)) + 
+  geom_histogram( binwidth=0.5, fill="#69b3a2", color="#e9ecef", alpha=0.9) +
+  ggtitle("Parch") +theme(plot.title = element_text(size=15))
+
+plot3<-ggplot(Titanic_complete,aes(x=Family.unit)) + 
+  geom_histogram( binwidth=0.5, fill="#69b3a2", color="#e9ecef", alpha=0.9) +
+  ggtitle("Family.unit") +theme(plot.title = element_text(size=15))
+
+plot4<-ggplot(Titanic_complete,aes(x=Fare)) + 
+  geom_histogram( binwidth=10, fill="#69b3a2", color="#e9ecef", alpha=0.9) +ggtitle("Fare") +
+  theme(plot.title = element_text(size=15))
+
+grid.arrange(plot1,plot2,plot3,plot4, ncol=2)
+
+```
+De las variables numéricas podemos ver que la única que tiene una distribución similar a la normal es la variable Age. Por los gráficos que obtenemos de las demás variables podemos tal vez considerar aproximarlas a una distreibución normal creo que esto es especialmente interesante para la variable Fare, en la que el rango de valores es muy amplio y va de 0 a 500 libras. 
+
+Por otra parte datos generales que extaremos de este análisis preeliminar y que será interesante evaluar en base a la supervivencia son: 
+* La edad de la mayoría de los pasajeros va de 18 a 40 años. Lo esperable es que sobrevivan más pasajeros entre estas edades, si solo se considerase esta variable. La media de edad es de aproximadamente 30 años
+* La mayoría de pasajeros viajaban solos
+* La mayoría han pagado tarifas entre 10 y 40 libras aproximadamente con una media de 33.
+
+De este análisis inicial y también por la manera en que he creado la variable "Family.unit" quiero ver si hay correlación entre variables ya que si la correlación es exacta esto podría afectar al modelo en análisis posteriores. 
+
+Es importante sobre todo de cara a las variables SibSp y Parch que son las que podríamos sospechar  como altamente relacionadas (esto sin considerar  Family.unit que es en la que más correlación espero, pero de esta última estoy evaluandola para substiruir SibSp y Parch)
+
+```{r chunk 34}
+library(GGally)
+require(gridExtra)
+#matriz de correlaciones
+cor(Titanic_complete[var.numeric])
+
+#gráfico de correlaciones para todas las variables numéricas
+
+plot5<-ggcorr(Titanic_complete[var.numeric])
+
+#gráfico de correlaciones excluyendo nueva variable "Family.unit"
+plot6<-ggcorr(Titanic_complete[var.numeric2])
+
+grid.arrange(plot5,plot6, ncol=2)
+#correlación entre Age y Fare
+cor.test(Titanic_complete$Age,Titanic_complete$Fare, method="spearman")
+
+#correlación entre SibSp y Parch
+cor.test(Titanic_complete$SibSp,Titanic_complete$Parch, method="spearman")
+cor.test(Titanic_complete$SibSp,Titanic_complete$Parch, method="spearman")
+
+
+#representación de las relaciones entre variables que estamos considerando de cara al modelo
+
+plot( Titanic_complete$Age ~ Titanic_complete$Family.unit, main="Age vs Family.unit" )
+plot( Titanic_complete$Age ~ Titanic_complete$Fare, main="Age vs Fare" )
+plot( Titanic_complete$Fare ~ Titanic_complete$Family.unit, main="Fare vs Family.unit" )
+
+
+```
+
+De los gráficos y tablas de correlación interpretamos que como era esperable la mayor relación está entre la variable Family.unit y las variables Parch y Sibsp, la variable Age no está relacionada con ninguna otra practicamente y la variable Fare está relacionada con todas las otras variables pero muy ligeramente.
+
+Para asegurarme respecto a este punto he planteado un test de correlación entre las dos variables continuas Age y Fare, y detecto que la correlación es baja, de 0.15, por lo tanto no hay peligro de colinealidad en el uso de estas dos variables, en Parch y SibSp el valor es más alto por lo que opto por plantear un analisis de PCA para reducir la dimensionalidad.
+
+El análisis de componentes principales permite, determinar nuevas variables numéricas que podría utilizar en lugar de las actuales y que expliquen la variabilidad, usualmente funciona mejor con variables continuas, así que no sería el método ideal, pero al contar con dos variables continuas, dos discretas y una (family.unit) que he creado que esta muy correlacionada con SibSp y Parch, pero que no sustituye del todo ambas variables he pensado que podía ser una opción viable, la otra alternativa que veo para la reducción de variables en este sentido es descartar las variables SibSp y Parch. De hacer eso me quedaría con 3 variables numéricas por lo que no lo descarto tampoco y dependerá del resultado que obtenga en el análisis de componentes principales que realizaré a continuación. 
+
+El análisis de componentes principales lo realizaré solo sobre las variables Parch,SibSp,Family unit, Age y Fare por lo que utilizaré el identificador de columnas [var.numeric] 
+
+```{r chunk 35}
+#Utilizo el modelo de componentes principales PCA
+pca<-prcomp(as.matrix(Titanic_complete[var.numeric]),scale=TRUE,center = TRUE)
+
+#Con la función summary puedo ver la variabilidad acumulada con las variables 
+#y de ahí es claro determinar que con 4 PCA explicamos la variabilidad completa
+#(recordemos que la variable Family Unit era una combinación de otras dos variables) 
+#y con 3 PCA  explicamos el 84% de la variabilidad  
+
+summary(pca)
+
+#Añado los 3 componentes principales al dataframe.
+#Esto reduciría nuestras 5 variables numéricas a solo 3.
+
+Titanic_complete<-cbind(Titanic_complete,pca$x[,1:3])
+head(Titanic_complete)
+
+#De  cara a facilitar analisis posteriores y la interpretación de  resultados 
+#En caso de que opte por continuar el análisis con PCA, 
+#voy a revisar las relaciones que hay entre PCA y las variables de partida 
+#Para ello debo estudiar las posibles correlaciones entre PCA y las variables de Partida.
+cor(Titanic_complete[var.numeric],pca$x[,1:3])
+
+```
+Del analisis de componentes principales por tanto las conclusiones que podemos sacar y que posteriormente nos serán necesarias para interpretar los resultados son  que:
+
+* PC1, está altamente relacionado negativamente con Family.unit>SibSp>Parch (cuanto más altos son estos  valores menor será PC1), el factor edad se relaciona favorablemente aunque el impacto es mínimo.
+* PC2 esta correlacionada  con Age y Fare. Es decir, cuando aumentan  Age y Fare también lo hace el PC2 los efectos de SibSp,Parch y Family.unit serían poco destacables en comparación
+* En PC3 la relación más estrecha se da con los factores Age positivamente (Si Age aumenta también lo hace PC3) y con fare.d (pero una relación negativa), si Fare.d aumenta PC3 disminuye y a la inversa, SibSp y Family.unit también tendrían cierta relación positiva aunque en comparación a la de Fare y Age, no es relevante el impacto.
+
+
+**Conclusión**
+
+Voy a optar por descartar las variables Parch y SibSp, en su lugar utilizaré la variable Family.unit que combina las dos anteriores. A pesar de hacer el análisis de componentes principales creo que las variables no son tan numerosas en este caso y la variable creada sobre la unidad familiar recoge los datos de las otras dos variables por lo que, la perdidad de variabilidad debería ser mínima.Además con 3 componentes principales explico solo un 84% de la variabilidad y teniendo un número reducido de variables creo que no compensa el uso de este método.
+
+#### Selección de variables: Variables categóricas
+
+Al igual que con las variables numéricas haré un estudio de las variables categóricas para revisar cuales participarán en el modelo.
+```{r chunk 36}
+#Barplot per variables categóricas
+plot7<-ggplot(Titanic_complete,
+              aes(x=Survived))+geom_bar(color="blue",
+                                        fill=rgb(0.1,0.4,0.5,0.7))
+plot8<-ggplot(Titanic_complete,
+              aes(x=Pclass))+geom_bar(color="blue",
+                                      fill=rgb(0.1,0.4,0.5,0.7))
+plot9<-ggplot(Titanic_complete,
+              aes(x=Surname))+geom_bar(color="blue",
+                                       fill=rgb(0.1,0.4,0.5,0.7))
+grid.arrange(plot7,plot8,plot9, ncol=2)
+
+plot10<-ggplot(Titanic_complete,
+               aes(x=Title))+geom_bar(color="blue",
+                                      fill=rgb(0.1,0.4,0.5,0.7))
+plot11<-ggplot(Titanic_complete,
+               aes(x=Sex))+geom_bar(color="blue",
+                                    fill=rgb(0.1,0.4,0.5,0.7))
+plot12<-ggplot(Titanic_complete,
+               aes(x=Embarked))+geom_bar(color="blue",
+                                         fill=rgb(0.1,0.4,0.5,0.7))
+
+grid.arrange(plot10,plot11,plot12, ncol=2)
+plot13<-ggplot(Titanic_complete,
+               aes(x=CabinG))+geom_bar(color="blue",
+                                       fill=rgb(0.1,0.4,0.5,0.7))
+plot14<-ggplot(Titanic_complete[Titanic_complete$CabinG!="N",],
+               aes(x=CabinG))+geom_bar(color="blue",
+                                       fill=rgb(0.1,0.4,0.5,0.7))
+grid.arrange(plot13,plot14, ncol=2)
+```
+
+Del estudio individual de las variables categóricas lo que interpretamos es lo siguiente
+
+* De los 900 aprox pasajeros de los que tenemos datos solo 300aprox sobrevivieron 
+
+*viajaron más hombres que mujeres 
+
+* Los pasajeros de tercera clase consituyen una amplia mayoría se esperaría que si solo se considera esta variable la mayoría de los supervivientes fueran de tercera clase.
+
+* La variable surname por si sola no nos aporta demasiado valor, si bien es cierto que algunos apellidos se agrupan la información combinada que nos aporta es bastante similar a la que nos podría dar la nueva variable Family,unit.
+
+* Los títulos nobiliarios y personas pertenecientes a la élite constituyen una minoria. 
+
+* La mayoría de pasajeros embarcan en South hampton que es también el punto de partida del barco.
+
+*En cuanto a la cubierta de las cabinas he planteado dos graficos en el segundo sin considerar los valores que desconocemos y en el primero tendríamos claramente que disponemos más datos de los pasajeros de las cabinas de la cubierta C
+
+*Conclusión:* De entre las variables categóricas las que descartaríamos en este punto serían "surname" y Cabin, esta última variable me resulta interesante pero considero que necesita procesamiento adicional y busqueda de información adicional para crear una variable compuesta. Por la limitación de tiempo, no entraré en mayor profundidad en cuanto al estudio de esa variable.
+
+#### Análisis exploratorio: relación entre variable supervivencia y otras variables
+
+En este punto ya hemos determinado que la variable supervivencia es la variable dependiente que quiero predecir, de cara a hacer la última selección de varibles es interesante ver la posible relación que pueda haber entre esta variables y las variables categóricas y numéricas
+
+
+```{r chunk 37}
+#comparaciónes en formato tabla entre supervivencia y variables categóricas.
+table(Titanic_complete$Survived,Titanic_complete$Pclass)
+table(Titanic_complete$Survived,Titanic_complete$Title)
+table(Titanic_complete$Survived,Titanic_complete$Sex)
+table(Titanic_complete$Survived,Titanic_complete$Embarked)
+table(Titanic_complete$Survived,Titanic_complete$CabinG)
+
+```
+
+De la comparación entre la supervivencia y las variables categóricas, lo que veo reflejado es lo siguiente:
+
+* Segun la clase parece haber más supervivencia para los pasajeros de primera clase
+* Sobre los títulos o cargos de Elite, sí parece haber más supervivencia de estas clases sociales aunque la idea principal que sacamos de esto es que más mujeres sobrevivieron
+* El punto anterior sobre la supervivencia de más mujeres en relación a los hombres se compara en la tabla de contraste entre Sexo y supervivencia
+* En cuanto al puerto de embarque sobreviven más pasajeros que embarcan en el puerto S aunque si tenemos en cuenta la supervivencia de los pasajeros que embarcan en cada puerto vemos claramente que entre los pasajeros que embarcaron por el puerto C la supervivencia es algo mayor al 50%, 
+* Por último sobre las cabinas vemos que la mayoría de los supervivientes tenían las cabinas en las cubiertas B y C. Pero es más destacable el hecho de los supervivientes de las cabinas  D   E  en las cuales solo murieron 8 pasajeros respectivamente (de los que contamos con información)
+* En cuanto a nuestro pasajero James Kelly 892, tiene muchos de los factores que a priori son desfavorables para su supervivencia (tercera clase, sin títulos, sexo masculino)
+
+Hacemos un análisis similar para las variables numéricas comparandolas con la variable "Survived".
+
+```{r chunk 38}
+aggregate(Titanic_complete[var.numeric2],list(Titanic_complete$Survived), mean)
+
+head(Titanic_complete)
+
+```
+
+Y lo más destacable es que este análisis preeliminar ya nos da una idea de que los pasajeros que pagaron tickets más caros tal vez tuvieron más probabilidades de supervivencia, también se puede intuir que factores como la edad (más jovenes) eran más favorables de cara a la supervivencia y también el sexo del pasajero aunque no son valores significativos. 
+
+*Conclusión:* 
+
+Las variables con las que plantearé el modelo serán:
+Survived, como variable dependiente a predecir.
+Pclass,Title,Sex,Age,Fare y Family.unit
+
+El modelo que aplicaré para la predicción es un modelo de regresión logística ya que intento predecir una variable dicotómica, el pasajero sobrevive (sí o no), por lo que aunque a grandes rasgos la limpieza de datos ya está realizada también tendré que realizar otras tareas de limpieza como será escalar y centrar los datos y binarizar las variables categóricas. 
+
+## 4.2 Comprobación de la normalidad y homogeneidad de la variancia.
+
+Para comprobar la normalidad utilizaré el test de Shapiro-Wilk.
+
+La hipotesis nula será que la població està distribuïda normalmente y la alternativa que no lo está. Utilizando un nivel de significación de 0,05 si el  pvalor es menor que el  nivel  de significación se rechazaría la hipotesis nula.
+
+```{r chunk 39}
+#Todos los test que planteo me dan el mismo resultado que las muestras no siguen una normal, a modo de ejemplo realizo los tests para Age y SibSp.
+
+shapiro.test(Titanic_complete$Age)
+#shapiro.test(Titanic_complete$Family.unit)
+#shapiro.test(Titanic_complete$Fare)
+
+
+```
+
+En todos los casos se esta rechazando la hipotesis de normalidad, pero hay que tener en cuenta que el test de Shapiro-Wilk a pesar de ser un método muy robusto. 
+
+Para muestras muy grandes no resulta efectivo muchas veces por lo que la normalidad se debe evaluar de otra maneras. 
+En cuanto a la variable Age por el histograma sí podemos identificar que se aproxima a la forma que tendría una normal, mientras que las demás variables no se aproximamn a la normal, por lo que con esa comprobación podríamos decir que las muestras no estan normalmente distribuidas para las otras variables.  
+
+Una última comprobación que podemos hacer para determinar la normalidad es un qqplot 
+
+
+```{r chunk 40}
+par(mfrow=c(2,2))
+qqnorm(Titanic_complete$Age, pch = 1, frame = FALSE, main="QQ plot Age")
+qqline(Titanic_complete$Age, col = "steelblue", lwd = 2)
+
+qqnorm(Titanic_complete$Family.unit, pch = 1, frame = FALSE, main="QQ plot Family.unit")
+qqline(Titanic_complete$Family.unit, col = "steelblue", lwd = 2)
+
+qqnorm(Titanic_complete$Fare, pch = 1, frame = FALSE, main="QQ plot Fare")
+qqline(Titanic_complete$Fare, col = "steelblue", lwd = 2)
+
+
+
+#Aunque finalmente he descartado continuar el modelo con variables PCA
+#He hecho pruebas de normalidad para PCA 
+#(estas no serían necesarias pero he hecho algunas comprobaciones extras
+#antes de descartar la opción de usar PCA).
+
+par(mfrow=c(2,3))
+qqnorm(Titanic_complete$PC1, pch = 1, frame = FALSE,main="QQ plot PC1")
+qqline(Titanic_complete$PC1, col = "steelblue", lwd = 2)
+qqnorm(Titanic_complete$PC2, pch = 1, frame = FALSE,main="QQ plot PC2")
+qqline(Titanic_complete$PC2, col = "steelblue", lwd = 2)
+qqnorm(Titanic_complete$PC3, pch = 1, frame = FALSE,main="QQ plot PC3")
+qqline(Titanic_complete$PC3, col = "steelblue", lwd = 2)
+hist(Titanic_complete$PC1, main="histograma PC1")
+hist(Titanic_complete$PC2, main="histograma PC2")
+hist(Titanic_complete$PC3, main="histograma PC3")
+
+#En este caso se ve que el tercer componente principal 
+#e incluso podríamos decir que con el segundo hay aproximaciones a la normal 
+#Esto es posible que se de porque ambos componentes estan muy 
+#correlacionados con la edad que sí sigue una normal 
+
+```
+
+De estas representaciones gráficas deducimos lo mismo que hemos detectado antes con los histogramas, la variable edad tiene una distribución que se aproxima bastante a la normal.
+
+Por lo que se refiere a las demás variables numéricas, por las represenntaciones gráficas no vemos tampoco una aproximación clara a la normal, pero al disponer de un número tan grande de registros o de muestra por el teorema del límite central podríamos aproximar todas las muestras a la distribución normal y tratarlas como si estuvieran normalmente distribuidas.
+
+El cambio que si será necesario es normalizar las variables y centrarlas ya que hay modelos sensibles a las diferencias de variancias y de escalas, de forma que, si no se igualan de alguna forma los predictores, aquellos que se midan en una escala mayor o que tengan más varianza, dominarán el modelo aunque no sean los que más relación tienen con la variable respuesta.Por lo tanto conviene normalizar las variables y centrarlas, en este caso lo haré utilizando las funciones scale y center de R.
+
+```{r chunk 45}
+
+#Antes de escalar y centrar los valores quiero mantener los datos
+#originales en un dataframe accesorio 
+#para poder tenerlos disponibles de cara a la creación de visualizaciones 
+#del apartado 5, por lo que genero un dataframe accesorio al que llamaré #Titanic_complete_raw
+
+Titanic_complete_raw<- Titanic_complete
+
+
+
+#escalo y centro las variables
+Titanic_complete$Age<-scale(Titanic_complete$Age,center = TRUE)
+Titanic_complete$Fare<-scale(Titanic_complete$Fare,center = TRUE)
+Titanic_complete$Family.unit<-scale(Titanic_complete$Family.unit,
+                                    center = TRUE)
+
+par(mfrow=c(2,3))
+qqnorm(Titanic_complete$Age, pch = 1, frame = FALSE,main="QQ plot Age")
+qqline(Titanic_complete$Age, col = "steelblue", lwd = 2)
+qqnorm(Titanic_complete$Fare, pch = 1, frame = FALSE,main="QQ plot Fare")
+qqline(Titanic_complete$Fare, col = "steelblue", lwd = 2)
+qqnorm(Titanic_complete$Family.unit, pch = 1, frame = FALSE,main="QQ plot Family.unit")
+qqline(Titanic_complete$Family.unit, col = "steelblue", lwd = 2)
+hist(Titanic_complete$Age, main="histograma Age")
+hist(Titanic_complete$Fare, main="histograma Fare")
+hist(Titanic_complete$Family.unit, main="histograma Family.unit")
+
+library(car)
+fligner.test(Age ~ Set_type, data = Titanic_complete)
+fligner.test(Fare ~ Set_type, data = Titanic_complete)
+fligner.test(Family.unit ~ Set_type, data = Titanic_complete)
+
+```
+
+Hecho este proceso tendremos las variables normalizadas y en cuanto a la homogeneidad de varianzas vemos que para los grupos de entrenamiento y test si se cumple.
+
+### Limpieza de datos últimos pasos
+
+Dado que como he indicado utilizaré un modelo de regresión logística, es necesario binarizar las variables categóricas. Pero antes de realizar este paso quiero eliminar de los datasets las variables que no continuaran en el modelo.
+
+```{r chunk 45.1}
+
+#Selección de variables predictoras a incluir en el modelo
+Titanic_complete<-Titanic_complete[, c(1,2,3,6,7,8,12,15,17)]
+#guardo el dataset con variables seleccionadas y limpieza
+write.csv(Titanic_complete,paste("C:/Users/mila_/Documents/Master ciencia de dades",
+  "/Tipología y ciclo de vida de los datos/PRAC 2/titanic_complete.csv",sep=""))
+
+#compruebo los datos
+head(Titanic_complete)
+
+
+```
+Por otra parte en este punto he decidido separar de nuevo los datos en test y entrenamiento, aunque tendré más adelante que binarizar las variables categoricas y tendré que hacer esa transformación sobre todos los grupos (test y train) 
+
+
+```{r chunk 45.2}
+
+#Separación de dataset Train para analisis y de test para la prueba del modelo 
+
+Train.f<-Titanic_complete%>%
+  select(PassengerId,Survived,
+         Pclass,Title,Sex,Age,Fare,Set_type,Family.unit)%>%
+  filter(Set_type=="train")
+
+Test.f<-Titanic_complete%>%
+  select(PassengerId,Survived,Pclass,Title,
+         Sex,Age,Fare,Set_type,Family.unit)%>%
+  filter(Set_type=="test")
+
+str(Train.f)
+
+
+```
+
+
+Una vez separados los grupos continuamos con el siguiente apartado relativo al análisis con test stadísticos
+
+
+
+## 4.3 Aplicación de pruebas estadísticas para comparar los grupos de datos. En función de los datos i del objetivo del estudio, aplicar pruebas de contraste de hipotesis, correlaciones, regressiones, etc. Aplicar al menos tres metodos de análisis diferentes
+
+### Correlación:
+
+He aplicado pruebas de correlación para las variables cuantitativas y a raiz de eso un análisis de componentes principales que se puede ver en el punto 4.1
+
+### Contraste de Hipotesis: contraste de proporciones
+
+De las cuestiones planteadas en el planteamiento del análisis voy a hacer un contraste de hipotesis sobre proporciones, la pregunta que pretendo responder con esto es algo que llama mi atención inicialmente quería plantear si la probabilidad de supervivencia de los nobles era más alta que la de personas sin títulos nobiliarios, pero la muestra de personas con título es demasiado pequeña así que en lugar de esa cuestión la que intentaré responder con una contraste de hipotesis sobre las proporciones es si ¿ pertenecer a una élite da más posibilidades de supervivencia en comparación a si no se pertenece a una élite
+
+```{r chunk 47}
+#hago una comprobación rápida de los supervivientes 
+#según el título que tengan 
+table(Train.f$Title,Train.f$Survived)
+```
+
+como el tamaño de la muestra es superior a 30 registros podemos asumir normalidad por lo que podemos continuar con el planteamiento de la hipótesis:
+
+```{r chunk 48}
+#Calculo de supervivientes nobles  y tamaño n muestra nobles
+x.p.sup.elite<-length(Train.f[Train.f$Title=="elite"&
+                                Train.f$Survived==1,"Title"])
+n.p.sup.elite<-length(Train.f[Train.f$Title=="elite","Title"])
+
+#Calculo de supervivientes no nobles y tamaño muestra "no nobles" 
+x.p.sup.n.elite<-length(Train.f[Train.f$Title=="non_elite"&
+                                  Train.f$Survived==1,"Title"])
+n.p.sup.n.elite<-length(Train.f[Train.f$Title=="non_elite","Title"])
+
+```
+
+Planteo las Hipotesis:  
+
+H0: P.sup.elite = p.sup.n.elite
+H1: P.Sup.elite > p.sup.n.elite
+
+```{r chunk 49}
+
+prop.test(x=c(x.p.sup.elite,x.p.sup.n.elite), n=c(n.p.sup.elite,n.p.sup.n.elite), p = NULL,
+          alternative = "greater",
+          conf.level = 0.95)
+
+```
+
+El p-valor es menor que el nivel de significación por lo tanto se acepta la hipotesis alternativa. 
+
+En efecto miembros de la aristocracia o con títulos nobiliarios tenían más probabilidades de supervivencia en el titanic, aunque la diferencia no es tan pronunciada como podríamos pensar, es posible que eso se explique en parte por que la mayoría de la aristocrácia que se tiene en cuenta en esta comparación son hombres y el acceso a los botes salvavidas se produjo en base a "mujeres y niños primero". 
+
+A raiz de este análisis se me ha ocurrido que para evaluar mejor la idoniedad de las variables cualitativas que usaré en el modelo de regresión lineal una mejor opción habria sido hacer contrastes de propociones en relación a la proporción de supervivencia global. 
+Es decir, si tengo una proporción de supervivenvia de 38,38%. Las variables cualitativas en las que puedo ver una supervivencia mayor a esta es muy posible que aporten valor al modelo y que si no mejoran esta proporción en cambio no aporten al modelo. Es una posibilidad que me parece interesannte de explorar y ciertamente más precisa que la que he usado, pero dada la limitación de tiempo optaré por mantener las variables que ya elegí en su momento. 
+Aún así hago un cálculo rápido de las proporciones muestrales para comprobar esta  "teoría" y en efecto es posible que sea interesante investigar esa vía.
+
+```{r chunk 50}
+prop.table(table(Train.f$Survived))
+prop.table(table(Train.f[Train.f$Sex=="female","Sex"],
+                 Train.f[Train.f$Sex=="female","Survived"]))
+
+```
+
+### Regressión logística
+
+La variable que intentamos predecir con el modelo es de tipo categórica y dicotómica (sobrevive o no sobrevive), por lo que en este caso lo más acertado es usar un modelo de regresión logística (logit). 
+
+Para poder aplicar este modelo de regresión tenemos que binarizar las variables cualitativas como llevamos comentando en apartados anteriores. Pero además en este punto tenemos que separar los datos de train.f en grupos otra vez de entrenamiento y test.
+
+```{r chunk 51}
+library(lattice)
+library(caret)
+
+#defino la proporción en que quiero dividir la muestra de entrenamiento y la muestra test.
+size_sample <- floor(0.80 * nrow(Train.f)) 
+
+#plantamos la semilla para que siempre se genere la misma división aleatoria de los registros en pasos posteriores
+set.seed(123)
+
+#separación de los datos en entrenamiento y test
+
+train.selection <- sample(seq_len(nrow(Train.f)), size = size_sample) 
+
+train.sample <- Train.f[train.selection, ] 
+test.sample <- Train.f[-train.selection, ] 
+
+#compruebo que la proporción de supervivientes es similar respecto a la de la muestra completa inicial y también entre ambos grupos (test y entrenamiento)
+
+prop.table(table(Train.f$Survived))
+prop.table(table(train.sample$Survived))
+prop.table(table(test.sample$Survived))
+
+#La variación es mínima e interpreto que la separación de datos se ha hecho de manera correcta. 
+```
+
+```{r chunk 52}
+
+#Binarización de los datos cualitativos.
+library(recipes)
+receta<- recipe( Survived ~ Pclass + Title + Sex + Age + Fare + Family.unit,
+                        data =  train.sample)
+
+
+receta <- receta %>% step_dummy(all_nominal(), -all_outcomes())
+
+#Se entrena el objeto receta 
+
+receta_trained<- prep(receta, training = train.sample)
+receta_trained
+
+#se aplican las transformaciones a train y test de registros conocidos
+
+train.sample.ok <- bake(receta_trained, new_data = train.sample)
+test.sample.ok  <- bake(receta_trained, new_data = test.sample)
+
+
+
+#Reviso como queda el set de entrenamiento cuando ya he binarizado las variables cualitativas
+glimpse(train.sample.ok)
+
+```
+
+En este punto ya se puede aplicar el modelo de regresión logística pero dado que tenemos que crear un modelo predictivo y no solo de regresión logística tengo que pasar por dos pasos más uno de entrenamiento del modelo y la predicción(que se hará aplicando el modelo de regresión logística.)
+
+Para esto he planteado 3 modelos la diferencia entre ellos son los predictores que se utilizan, para el primero y el segundo, he utilizado todas las variables que había seleccionado y las variables categóricas binarizadas, pero he expresado la fórmula de manera distinta mi intención era ver si el resultado era el mismo y así ha sido. 
+
+Y para el tercero las mismas variables que en el segundo pero eliminando la variable Fare
+
+```{r chunk 53}
+
+#planteamiento de modelos de regresión logística múltiple
+set.seed(123)
+modelo_reg.logistic <- train(Survived ~ ., data = train.sample.ok,
+                         method = "glm",
+                         metric = "Accuracy",
+                         family = "binomial")
+
+equation_2<-"Survived ~ Pclass_X2 + Pclass_X3 + Title_non_elite + Sex_male + Age + Fare + Family.unit"
+formula_2<- as.formula(equation_2)
+set.seed(123)
+modelo_reg.logistic_2 <- train(formula_2, data = train.sample.ok,
+                         method = "glm",
+                         metric = "Accuracy",
+                         family = "binomial")
+
+equation_3<-"Survived ~ Pclass_X2 + Pclass_X3 + Title_non_elite + Sex_male + Age + Family.unit"
+formula_3<- as.formula(equation_3)
+set.seed(123)
+modelo_reg.logistic_3 <- train(formula_3, data = train.sample.ok,
+                         method = "glm",
+                         metric = "Accuracy",
+                         family = "binomial")
+
+#Resumen de los resultados de los 3 modelos. 
+
+modelo_reg.logistic
+
+summary(modelo_reg.logistic$finalModel)
+
+modelo_reg.logistic_2
+
+summary(modelo_reg.logistic_2$finalModel)
+
+modelo_reg.logistic_3
+
+summary(modelo_reg.logistic_3$finalModel)
+
+```
+
+Las diferencias entre modelos no son representativas no comportan que el valor AIC disminuya, al contrario aumenta y la precisión se mantiene al rededor del 80%, por lo que voy a optar por mantener el modelo original para la predicción. 
+
+```{r chunk 54}
+library(vcd)
+
+#predicciones de los valores de supervivencia.
+predicciones_raw <- predict(modelo_reg.logistic, newdata = test.sample.ok,
+                            type = "raw")
+
+#predicciones  de la probabilidad de que lla supervivencia sea 0 u 1 
+predicciones_prob<- predict(modelo_reg.logistic, newdata = test.sample.ok,
+                            type = "prob")
+
+```
+## 5. Representación de los resultados a partir de tablas i graficas
+
+Al tratarse de un modelo con 5 predictores no es posible hacer una representación gráfica que los incluya a todos ya que necesitaríamos un espacio con 5 dimensiones. No obstante se pueden hacer representaciones de la supervivencia en relación a las variables más representativas para el modelo predictivo en este caso la clase, el sexo y la pertenencia a un grupo que se pueda considerar "elite"
+
+Además también podemos representar el grado de aciertos que tiene nuestro modelo en relación a las observaciones conocidas.
+
+
+```{r chunk 55}
+
+#Para evaluar los aciertos 
+
+confusionMatrix(data = predicciones_raw, reference = test.sample.ok$Survived,positive="1")
+mosaic(~ predicciones_raw + test.sample.ok$Survived,
+main = "Survival on the Titanic", shade = TRUE, colorize=T ,legend = TRUE)
+```
+
+Tanto en la tabla como en la matriz de confusión podemos ver el nivel de aciertos del modelo ya que estamos comparando los valores originales del grupo test con valores conocidos con la predicción que hace el modelo en rosa se representan los valores para los que no se ha acertado.
+
+
+```{r chunk 56}
+
+#Para la representación de la edad quiero utilizar los datos sin escalar así que utilizaré el dataframe accesorio Titanic_complete_raw
+
+hist(Titanic_complete_raw[Titanic_complete_raw$Survived==1,"Age"], breaks=30,xlim=c(0,80), ylim=c(0,60),col=rgb(1,0,0,0.5), xlab="Age", main="Age distribution by survival")
+hist(Titanic_complete_raw[Titanic_complete_raw$Survived==0,"Age"], breaks=30,xlim=c(0,80), ylim=c(0,60), col=rgb(0,0,1,0.5), add=T)
+legend("topleft", legend=c("Survived","Not survived"), col=c(rgb(1,0,0,0.5), 
+     rgb(0,0,1,0.5)), pt.cex=2, pch=15 )
+
+
+#Adicionalmente hago también una representación de los datos escalados y centrados
+
+hist(Titanic_complete[Titanic_complete$Survived==1,"Age"], breaks=30,xlim=c(-3,5), ylim=c(0,70),col=rgb(1,0,0,0.5), xlab="Age", main="Age distribution by survival(scaled values)")
+hist(Titanic_complete[Titanic_complete$Survived==0,"Age"], breaks=30,xlim=c(-3,5), ylim=c(0,70), col=rgb(0,0,1,0.5), add=T)
+legend("topleft", legend=c("Survived","Not survived"), col=c(rgb(1,0,0,0.5), 
+     rgb(0,0,1,0.5)), pt.cex=2, pch=15 )
+
+
+length(Titanic_complete_raw[Titanic_complete_raw$Age<10,"Age"])
+
+(82/1309)*100
+
+```
+
+De este último gráfico la conclusión que obtengo es de que pese a que los valores son diferentes(en el segundo grupo se han normalizado) la distribución es muy similar y el único rango en que la supervivencia es mayor es en el de los niños menores de 10 años, esto explica porque en nuestro modelo la variable age no es tan significativa como esperaríamos si contabilizamos el número de pasajeros con menos de 10 años podremos ver que no representan más del 6% de los pasajeros totales por lo que la supervivencia que aumenta en este rango de edad tiene poco efecto en la muestra general y esto explicaria que no se trate de un factor tan importante para el modelo. Por otra parte otras variables que representaremos a continuación si tendrían un peso más importante en el modelo. Será el caso de la variable Sex, Class y title. 
+
+Para hacer la representación de estas variables utilizaré el dataset Titanic_complete final donde ya no hay valores missing pero sin tener aún las variables binarizadas. He considerado que era más facil hacer la representación de este modo siendo que la intención de estas visualizaciones es explicar los resultados que extraemos de la interpretación del modelo, y que tanto los datos iniciales como finales si el modelo es correcto tendrán un comportamiento similar al que se ve en el modelo.
+
+```{r chunk 57}
+library(dplyr)
+library(forcats)
+
+#Grafico de la variable Survived en relación a la variable sex
+agg_1 <-  na.omit(count(Titanic_complete, Survived,Sex))
+head(agg_1)
+
+agg_ord_1 <- mutate(agg_1,
+                  Survived = reorder(Survived, -n, sum),
+                  Sex = reorder(Sex, -n, sum))
+p1 <- ggplot(agg_ord_1) +
+      geom_col(aes(x = Survived, y = n, fill = Sex))
+p2 <- ggplot(agg_ord_1) +
+      geom_col(aes(x = Survived, y = n, fill = Sex), position = "dodge")
+grid.arrange(p1, p2, nrow = 1)
+
+#Grafico de la variable Survived en relación a la variable Pclass
+
+agg_2 <-  na.omit(count(Titanic_complete, Survived,Pclass))
+head(agg_2)
+
+agg_ord_2 <- mutate(agg_2,
+                  Survived = reorder(Survived, -n, sum),
+                  Pclass = reorder(Pclass, -n, sum))
+p3 <- ggplot(agg_ord_2) +
+      geom_col(aes(x = Survived, y = n, fill = Pclass))
+p4 <- ggplot(agg_ord_2) +
+      geom_col(aes(x = Survived, y = n, fill = Pclass), position = "dodge")
+grid.arrange(p3, p4, nrow = 1)
+
+#Grafico de la variable Survived en relación a la variable Title
+
+agg_3 <-  na.omit(count(Titanic_complete, Survived,Title))
+head(agg_3)
+
+agg_ord_3 <- mutate(agg_3,
+                  Survived = reorder(Survived, -n, sum),
+                  Title = reorder(Title, -n, sum))
+p3 <- ggplot(agg_ord_3) +
+      geom_col(aes(x = Survived, y = n, fill = Title))
+p4 <- ggplot(agg_ord_3) +
+      geom_col(aes(x = Survived, y = n, fill = Title), position = "dodge")
+grid.arrange(p3, p4, nrow = 1)
+
+
+
+```
+
+La interpretación de estos gráficos es que en efecto el sexo es una variable que influye en la supervivencia, los hombres sobreviven menos, lo mismo con la clase, un pasajero de 3ª clase tenía menos posibilidades de sobrevivir y en cuanto a la pertenencia a una élite es un factor desfavorable en caso de no pertenecer a la Elite 
+
+Lo cierto es que lo que nos sugieren todos estos datos no dan un buen pronostico para el pasajero James Kelly al que estoy haciendo seguimiento en el análisis
+
+Sería interesante también calcular los logaritmos de los coeficientes para ver en que proporciones afecta cada factor, pero dado que no es el objetivo final del proyecto no me adentraré en este aspecto.
+
+
+## 6.Resolución del problema. 
+```{r chunk 58}
+
+# Aplicamos el modelo predictivo a la muestra test en blanco que tenemos 
+Test.f.ok<-bake(receta_trained, new_data = Test.f)
+
+Predicted <- predict(modelo_reg.logistic, newdata = Test.f.ok,
+                            type = "raw")
+Test.f$Survived<-Predicted
+
+#Compruebo también la predicción que ha hecho el modelo sobre el pasajero 892 Kelly, Mr. James hombre de aproximadamente 34 años que viajó solo en el Titanic con un pasaje de tercera clase. 
+
+Test.f[Test.f$PassengerId==892]
+
+```
+
+
+
+##7. A partir de los resultados obtenidos, cuales són las conclusions? Los resultados permiten responder al problema.
+
+A partir del modelo de regresión logística podemos predecir con un 80% de precisión si un pasajero sobrevivirá al naufragio considerando factores como la edad, el sexo, la clase y el número de familiares con el que viajaba, o su nivel de influencia (título). 
+
+En terminos generales y saliendo de la predicción propiammente, en el modelo el factor que tiene más influencia es el género, las mujeres tenían más probabilidad de supervivencia en el Titánic. Esto va en la linea de lo que ya hemos visto desde la exploración inicial
+Otras variables que afectarían serían los títulos (entendidos como la pertenencia a una élite por herencia o por trabajos privilegiados), la clase, y el tamaño de la unidad familiar con la que se viajaba, también sería significativa la edad aunque en menor medida y lo que no influiria tanto sería la tarifa.
+
+En el momento de analizar la tarifa ya indicamos que es una variable compuesta por lo que es dificil determinar hasta que punto es relevante sin conocer todos los factores de las que esta compuesta. 
+
+Aún así el modelo si nos permite hacer una predicción aunque esta sería una primera iteración del proyecto hay varias variables que tienen potencial para seguir siendo exploradas y además se pueden hacer pruebas adicionales en cuanto a comparación de modelos por ejemplo, que sería lo más habitual y recomendable, en mi caso por el límite de tiempo de dedicación no he podido indagar más en algunos aspectos como sería el de plantear más modelos o pararme más en las variables, o el ver la influencia que tendría cada factor en el modelo. 
+
+La variable cabin y embarked considero que se podrían haber desarrollado más e incluso ticket es posible que las letras de los tickets tuvieran alguna relación con el puerto de embarque o con las cabinas pero, son variables que requieren más tiempo de preprocesado y de investigación, y sería también interesante contraponer esos datos a los datos técnicos que se pueden encontrar en cuanto a como se produjo el hundimiento, por donde se produjo el choque, etc. 
+
+Además a pesar de que la precisión del modelo parece estar dentro de un rango bueno del 80% el valor del valor del criterio de AIC es de 628.83 que resulta algo elevado por lo que seria posible implementar modelos diferentes para disminuir ese valor y que la valoración del modelo sea mejor.
+
+Aún así en terminos generales creo que las conclusiones serían:
+
+* El modelo de regresión logística múltiple nos permite predecir los pasajeros que sobreviven y mueren en el Titánic tratandose de una variable dicotómica.
+
+* Las variables que tienen mayor impacto en el modelo son el sexo y la clase. 
+
+* La tarifa no esta necesariamente relacionada con la clase, y es una variable compleja que no se puede asociar directamente con la clase alta. 
+
+*Las personas con influencia (títulos o trabajos reconocidos)tenían más probabilidades de sobrevivir que personas que no tuvieran esto. 
+
+*La edad no es un factor tan determinante por lo que el ser menor de edad no garantizaba la supervivencia. 
+
+*El pasajero 892 Lo que he visto y analizado es que tenía varios factores importantes en contra, era hombre y viajaba en tercera clase. La predicción del modelo es que no sobrevivió y buscando información en internet se confirma esto. 
+<CENTER> ![](C:/Users/mila_/Documents/Master ciencia de dades/Tipología y ciclo de vida de los datos/PRAC 2/James Kelly.png){width='400'} </CENTER>
+
+Estas serían las conclusiones finales que tengo por el momento.
+La bibliografia que he utilizado y el detalle sobre el contenido del repositorio se puede consultar en https://github.com/MilaRG/Titanic_with_R
