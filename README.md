@@ -15,9 +15,9 @@ No obstante el proyecto aún esta en una fase inicial y requiere más trabajo pa
 Para hacer el proyecto se utilizan datos de Kaggle 
 En este repositorio encontrarás: 
 
-* Una carpeta con los datos de partida proporcionados por Kaggle para la competición en curso sobre el titanic (https://www.kaggle.com/c/titanic)
-* Una carpeta con el codigo generado para la limpieza y analisis de datos  y la respuesta a las preguntas planteadas en la práctica en formato R Markdown, y en formato PDF   * Un fichero CSV con los datos finales a analizar (tras la limpieza y selección de datos aunque sin incluir la binarización para variables categóricas)
-* Un fichero CSV con las predicciones tras la aplicación del modelo 
+* Titanic_kaggle source data.zip: carpeta con los datos de partida proporcionados por Kaggle para la competición en curso sobre el titanic (https://www.kaggle.com/c/titanic)
+* Code_PRAC: carpeta con el codigo generado para la limpieza y analisis de datos  y la respuesta a las preguntas planteadas en la práctica en formato R Markdown, y en formato PDF, contiene además el entorno de R studio e imagenes utilizadas para el informe en R markdown   
+* Titanic_complete_preprocessed_clean_dataUn fichero CSV con los datos finales a analizar (tras la limpieza y selección de datos aunque sin incluir la binarización para variables categóricas) 
 ## Tecnologías 
 
 * R
